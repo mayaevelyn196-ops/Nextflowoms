@@ -2678,5 +2678,4 @@ if __name__ == '__main__':
         os.makedirs('templates', exist_ok=True)
     
     port = int(os.environ.get('PORT', 8080))
-    print(f"NexFlow OMS v10.2 - http://localhost:{port}")
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
