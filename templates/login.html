@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexFlow OMS — Secure Access</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <style>
+        :root {
+            --bg: #030308;
+            --fg: #e2e8f0;
+            --muted: #4a5568;
+            --accent: #00d4ff;
+            --accent2: #8b5cf6;
+            --card: rgba(6, 10, 28, 0.82);
+            --border: rgba(255,255,255,0.06);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #bg-canvas { position: fixed; inset: 0; z-index: 0; }
+
+        .loader-screen {
+            position: fixed; inset: 0; z-index: 9999;
+            background: var(--bg);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1s ease, visibility 1s;
+        }
+        .loader-screen.done { opacity: 0; visibility: hidden; pointer-events: none; }
+        .loader-ring {
+            width: 44px; height: 44px;
+            border: 2px solid transparent;
+            border-top-color: var(--accent);
+            border-right-color: var(--accent2);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loader-label {
+            margin-top: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem; color: var(--muted);
+            letter-spacing: 0.15em; text-transform: uppercase;
+        }
+
+        .vignette {
+            position: fixed; inset: 0; pointer-events: none; z-index: 1;
+            background: radial-gradient(ellipse at center, transparent 25%, rgba(0,0,0,0.75) 100%);
+        }
+        .scanlines {
+            position: fixed; inset: 0; pointer-events: none; z-index: 2;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px);
+        }
+
+        .hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; padding: 1.2rem; }
+        .hud-cell {
+            position: absolute;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.58rem; color: rgba(255,255,255,0.16);
+            letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.9;
+        }
+        .hud-tl { top: 1.2rem; left: 1.2rem; }
+        .hud-tr { top: 1.2rem; right: 1.2rem; text-align: right; }
+        .hud-bl { bottom: 1.2rem; left: 1.2rem; }
+        .hud-br { bottom: 1.2rem; right: 1.2rem; text-align: right; }
+        .hud-dot {
+            display: inline-block; width: 5px; height: 5px;
+            border-radius: 50%; background: #00ff88; margin-right: 6px;
+            vertical-align: middle;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+            0%,100% { opacity: .35; box-shadow: 0 0 0 0 rgba(0,255,136,.3); }
+            50% { opacity: 1; box-shadow: 0 0 6px 2px rgba(0,255,136,.25); }
+        }
+
+        .login-wrap {
+            position: fixed; inset: 0; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            padding: 1rem;
+        }
+
+        .card-glow {
+            position: absolute; inset: -60px; border-radius: 50%;
+            background: radial-gradient(ellipse at center, rgba(0,212,255,.05) 0%, transparent 70%);
+            z-index: -1;
+            animation: breathe 5s ease-in-out infinite;
+        }
+        @keyframes breathe {
+            0%,100% { opacity: .4; transform: scale(.92); }
+            50% { opacity: 1; transform: scale(1.08); }
+        }
+
+        .card-border {
+            position: relative;
+            border-radius: 1.5rem;
+            padding: 1.5px;
+            overflow: hidden;
+            width: 100%; max-width: 440px;
+            box-shadow:
+                0 0 80px rgba(0,212,255,.04),
+                0 0 160px rgba(139,92,246,.03),
+                0 25px 60px rgba(0,0,0,.5);
+        }
+        .card-border::before {
+            content: '';
+            position: absolute; inset: -180%;
+            background: conic-gradient(
+                from 0deg,
+                transparent 0%, var(--accent) 8%, transparent 16%,
+                var(--accent2) 24%, transparent 32%,
+                transparent 100%
+            );
+            animation: rotate-border 5s linear infinite;
+        }
+        @keyframes rotate-border { to { transform: rotate(360deg); } }
+
+        .card-body {
+            position: relative; z-index: 1;
+            background: var(--card);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: calc(1.5rem - 1.5px);
+            padding: 2.5rem 2.25rem;
+        }
+
+        .card-body::after {
+            content: '';
+            position: absolute; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0,212,255,.2), transparent);
+            animation: card-scan 4.5s ease-in-out infinite;
+            pointer-events: none; z-index: 30;
+        }
+        @keyframes card-scan {
+            0%,100% { top: -2px; opacity: 0; }
+            4% { opacity: 1; }
+            96% { opacity: 1; }
+            100% { top: calc(100% + 2px); opacity: 0; }
+        }
+
+        .cmark { position: absolute; width: 14px; height: 14px; z-index: 20; pointer-events: none; }
+        .cmark::before, .cmark::after { content: ''; position: absolute; background: rgba(0,212,255,.18); }
+        .cmark.tl { top: 10px; left: 10px; }
+        .cmark.tl::before { top:0;left:0;width:14px;height:1px; }
+        .cmark.tl::after  { top:0;left:0;width:1px;height:14px; }
+        .cmark.tr { top: 10px; right: 10px; }
+        .cmark.tr::before { top:0;right:0;width:14px;height:1px; }
+        .cmark.tr::after  { top:0;right:0;width:1px;height:14px; }
+        .cmark.bl { bottom: 10px; left: 10px; }
+        .cmark.bl::before { bottom:0;left:0;width:14px;height:1px; }
+        .cmark.bl::after  { bottom:0;left:0;width:1px;height:14px; }
+        .cmark.br { bottom: 10px; right: 10px; }
+        .cmark.br::before { bottom:0;right:0;width:14px;height:1px; }
+        .cmark.br::after  { bottom:0;right:0;width:1px;height:14px; }
+
+        .logo-box {
+            width: 54px; height: 54px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(0,212,255,.1), rgba(139,92,246,.1));
+            border: 1px solid rgba(0,212,255,.12);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1.15rem;
+            animation: logo-glow 3.5s ease-in-out infinite;
+        }
+        @keyframes logo-glow {
+            0%,100% { box-shadow: 0 0 0 0 rgba(0,212,255,.08); }
+            50% { box-shadow: 0 0 24px 4px rgba(0,212,255,.07); }
+        }
+        .logo-box i {
+            font-size: 1.35rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .card-title {
+            font-size: 1.35rem; font-weight: 700; text-align: center;
+            color: #f1f5f9; letter-spacing: -0.02em;
+        }
+        .card-sub {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem; color: var(--muted);
+            text-align: center; margin-top: .45rem;
+            letter-spacing: .1em; text-transform: uppercase;
+            min-height: 1.1em;
+        }
+        .card-sub .caret {
+            display: inline-block; width: 5px; height: 9px;
+            background: var(--accent); margin-left: 2px;
+            vertical-align: middle;
+            animation: blink-caret 1s step-end infinite;
+        }
+        @keyframes blink-caret { 50% { opacity: 0; } }
+
+        .divider {
+            height: 1px; margin: 1.5rem 0;
+            background: linear-gradient(90deg, transparent, var(--border), rgba(0,212,255,.08), var(--border), transparent);
+        }
+
+        .field { position: relative; margin-bottom: 1.2rem; }
+        .field input {
+            width: 100%;
+            padding: 1.05rem 1rem .55rem 1rem;
+            background: rgba(255,255,255,.02);
+            border: 1.5px solid var(--border);
+            border-radius: 11px;
+            color: var(--fg);
+            font-size: .93rem;
+            font-family: 'Inter', sans-serif;
+            transition: all .3s cubic-bezier(.4,0,.2,1);
+            outline: none;
+        }
+        .field input::placeholder { color: transparent; }
+        .field input.pw-field { padding-right: 2.8rem; }
+        .field label {
+            position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+            color: var(--muted); font-size: .88rem;
+            transition: all .3s cubic-bezier(.4,0,.2,1);
+            pointer-events: none;
+        }
+        .field input:focus + label,
+        .field input:not(:placeholder-shown) + label {
+            top: .6rem; transform: translateY(0);
+            font-size: .56rem; color: var(--accent);
+            letter-spacing: .09em; text-transform: uppercase; font-weight: 600;
+        }
+        .field input:focus {
+            border-color: rgba(0,212,255,.3);
+            background: rgba(0,212,255,.015);
+            box-shadow: 0 0 0 4px rgba(0,212,255,.05), inset 0 0 24px rgba(0,212,255,.015);
+        }
+        .field .underline {
+            position: absolute; bottom: 0; left: 50%; width: 0; height: 2px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            border-radius: 0 0 11px 11px;
+            transition: width .4s cubic-bezier(.4,0,.2,1);
+            transform: translateX(-50%);
+        }
+        .field input:focus ~ .underline { width: 100%; }
+
+        .pw-btn {
+            position: absolute; right: .85rem; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: var(--muted);
+            cursor: pointer; padding: 4px; font-size: .82rem;
+            transition: color .2s; z-index: 2;
+        }
+        .pw-btn:hover { color: var(--accent); }
+
+        .opts {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.4rem;
+        }
+        .toggle-label {
+            display: flex; align-items: center; gap: 8px;
+            cursor: pointer; font-size: .75rem; color: var(--muted); user-select: none;
+        }
+        .toggle-label input { display: none; }
+        .toggle-track {
+            width: 30px; height: 16px;
+            background: rgba(255,255,255,.07);
+            border-radius: 8px; position: relative; transition: background .3s;
+        }
+        .toggle-track::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 12px; height: 12px;
+            background: var(--muted); border-radius: 50%;
+            transition: all .3s;
+        }
+        .toggle-label input:checked + .toggle-track { background: rgba(0,212,255,.18); }
+        .toggle-label input:checked + .toggle-track::after {
+            left: 16px; background: var(--accent);
+            box-shadow: 0 0 6px rgba(0,212,255,.4);
+        }
+        .forgot {
+            font-size: .72rem; color: var(--muted);
+            text-decoration: none; transition: color .2s; cursor: pointer;
+        }
+        .forgot:hover { color: var(--accent); }
+
+        .btn-login {
+            width: 100%; padding: .88rem; border: none; border-radius: 11px;
+            font-family: 'Inter', sans-serif; font-weight: 600; font-size: .93rem;
+            color: #fff; cursor: pointer; position: relative; overflow: hidden;
+            background: linear-gradient(135deg, rgba(0,212,255,.15), rgba(139,92,246,.15));
+            border: 1.5px solid rgba(0,212,255,.2);
+            transition: all .4s cubic-bezier(.4,0,.2,1);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-login:hover:not(.is-loading) {
+            background: linear-gradient(135deg, rgba(0,212,255,.28), rgba(139,92,246,.28));
+            border-color: rgba(0,212,255,.45);
+            box-shadow: 0 0 36px rgba(0,212,255,.12), 0 10px 40px rgba(0,0,0,.3);
+            transform: translateY(-1px);
+        }
+        .btn-login:active:not(.is-loading) { transform: translateY(0); }
+        .btn-login .btn-content { transition: opacity .25s; display: flex; align-items: center; gap: 8px; }
+        .btn-login.is-loading .btn-content { opacity: 0; }
+        .btn-login .btn-spin { position: absolute; opacity: 0; transition: opacity .25s; }
+        .btn-login.is-loading .btn-spin { opacity: 1; }
+        .mini-spin {
+            width: 18px; height: 18px;
+            border: 2px solid transparent;
+            border-top-color: var(--accent); border-right-color: var(--accent2);
+            border-radius: 50%; animation: spin .7s linear infinite;
+        }
+
+        .btn-biometric {
+            width: 100%; padding: .88rem; border: none; border-radius: 11px;
+            font-family: 'Inter', sans-serif; font-weight: 600; font-size: .85rem;
+            color: #fff; cursor: pointer; position: relative; overflow: hidden;
+            background: linear-gradient(135deg, rgba(139,92,246,.15), rgba(99,102,241,.15));
+            border: 1.5px solid rgba(139,92,246,.2);
+            transition: all .4s cubic-bezier(.4,0,.2,1);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-top: 0.75rem;
+        }
+        .btn-biometric:hover:not(.is-loading) {
+            background: linear-gradient(135deg, rgba(139,92,246,.28), rgba(99,102,241,.28));
+            border-color: rgba(139,92,246,.45);
+            box-shadow: 0 0 36px rgba(139,92,246,.12), 0 10px 40px rgba(0,0,0,.3);
+            transform: translateY(-1px);
+        }
+        .btn-biometric .biometric-icon { font-size: 1.1rem; color: rgba(139,92,246,.8); }
+        .btn-biometric.is-loading .btn-content { opacity: 0; }
+        .btn-biometric .btn-spin { position: absolute; opacity: 0; transition: opacity .25s; }
+        .btn-biometric.is-loading .btn-spin { opacity: 1; }
+
+        .err-box {
+            background: rgba(239,68,68,.06);
+            border: 1px solid rgba(239,68,68,.18);
+            color: #fca5a5; padding: .7rem .9rem;
+            border-radius: 10px; margin-bottom: 1.15rem;
+            font-size: .78rem;
+            display: flex; align-items: center; gap: 8px;
+            animation: err-slide .4s ease-out;
+        }
+        @keyframes err-slide {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .shake { animation: shake .5s ease-in-out; }
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            15% { transform: translateX(-6px); }
+            30% { transform: translateX(6px); }
+            45% { transform: translateX(-3px); }
+            60% { transform: translateX(3px); }
+            75% { transform: translateX(-1px); }
+        }
+
+        .card-foot {
+            text-align: center; margin-top: 1.4rem; padding-top: .9rem;
+            border-top: 1px solid var(--border);
+        }
+        .card-foot p {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .56rem; color: rgba(255,255,255,.1); letter-spacing: .04em;
+        }
+        .or-separator {
+            display: flex; align-items: center; gap: 10px; margin: 0.75rem 0;
+        }
+        .or-separator::before, .or-separator::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+        .or-separator span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.55rem; color: var(--muted);
+            letter-spacing: 0.1em; text-transform: uppercase;
+        }
+        .biometric-status {
+            text-align: center; margin-top: 0.5rem;
+            font-size: 0.7rem; min-height: 1.2em;
+            transition: all 0.3s ease;
+        }
+        .biometric-status.success { color: #34d399; }
+        .biometric-status.error { color: #fca5a5; }
+        .biometric-status.loading { color: var(--accent); }
+
+        @media (max-width: 480px) {
+            .card-body { padding: 2rem 1.4rem; }
+            .card-title { font-size: 1.15rem; }
+            .hud { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="loader-screen" id="loader">
+        <div class="loader-ring"></div>
+        <div class="loader-label">Establishing secure channel</div>
+    </div>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="vignette"></div>
+    <div class="scanlines"></div>
+
+    <div class="hud" aria-hidden="true">
+        <div class="hud-cell hud-tl">
+            <span class="hud-dot"></span>NexFlow OMS v8.0<br>Secure Channel Active
+        </div>
+        <div class="hud-cell hud-tr" id="hud-clock">--:--:--<br>UTC+00:00</div>
+        <div class="hud-cell hud-bl">
+            Session: <span id="sess-id">—</span><br>
+            Latency: <span id="lat-val">12ms</span>
+        </div>
+        <div class="hud-cell hud-br">
+            <i class="fas fa-shield-halved" style="color:rgba(0,255,136,.25)"></i> TLS 1.3<br>
+            <i class="fas fa-lock" style="color:rgba(0,255,136,.25)"></i> AES-256-GCM
+        </div>
+    </div>
+
+    <div class="login-wrap">
+        <div class="card-glow"></div>
+        <div class="card-border" id="card-border">
+            <div class="card-body">
+                <div class="cmark tl"></div><div class="cmark tr"></div>
+                <div class="cmark bl"></div><div class="cmark br"></div>
+
+                <div style="margin-bottom:.25rem">
+                    <div class="logo-box"><i class="fas fa-bolt"></i></div>
+                    <h1 class="card-title">NexFlow OMS</h1>
+                    <p class="card-sub" id="sub-text"></p>
+                </div>
+
+                <div class="divider"></div>
+
+                {% if error %}
+                <div class="err-box" id="error-box">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="err-box" id="dynamic-error" style="display:none;">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span id="dynamic-error-text"></span>
+                </div>
+
+                <form method="POST" action="/login" id="login-form" autocomplete="on">
+                    <div class="field">
+                        <input type="text" name="username" id="inp-user" required placeholder=" " autocomplete="username">
+                        <label for="inp-user">Username</label>
+                        <div class="underline"></div>
+                    </div>
+                    <div class="field">
+                        <input type="password" name="password" id="inp-pw" required placeholder=" " autocomplete="current-password" class="pw-field">
+                        <label for="inp-pw">Password</label>
+                        <button type="button" class="pw-btn" id="pw-btn" aria-label="Toggle password visibility">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <div class="underline"></div>
+                    </div>
+
+                    <button type="submit" class="btn-login" id="btn-login">
+                        <span class="btn-content">
+                            <i class="fas fa-right-to-bracket" style="font-size:.82rem"></i>
+                            Authenticate
+                        </span>
+                        <span class="btn-spin"><div class="mini-spin"></div></span>
+                    </button>
+                </form>
+
+                <div class="or-separator">
+                    <span>or</span>
+                </div>
+
+                <button type="button" id="biometric-btn" class="btn-biometric">
+                    <span class="btn-content">
+                        <i class="fas fa-fingerprint biometric-icon"></i>
+                        Login with Biometric
+                    </span>
+                    <span class="btn-spin"><div class="mini-spin"></div></span>
+                </button>
+                
+                <div class="biometric-status" id="biometric-status"></div>
+
+                <div class="card-foot">
+                    <p>NexFlow OMS v8.0 · Secure Access</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        const canvas = document.getElementById('bg-canvas');
+        let W = innerWidth, H = innerHeight;
+        const DPR = Math.min(devicePixelRatio, 2);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030308);
+        scene.fog = new THREE.FogExp2(0x030308, 0.055);
+
+        const camera = new THREE.PerspectiveCamera(48, W / H, 0.1, 100);
+        camera.position.set(0, 1.0, 6.5);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(W, H);
+        renderer.setPixelRatio(DPR);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 1.4, 0.5, 0.52));
+
+        const outerMesh = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(2.4, 1),
+            new THREE.MeshBasicMaterial({ color: 0x00d4ff, wireframe: true, transparent: true, opacity: 0.06 })
+        );
+        scene.add(outerMesh);
+
+        const midMesh = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(1.5, 0),
+            new THREE.MeshBasicMaterial({ color: 0x8b5cf6, wireframe: true, transparent: true, opacity: 0.12 })
+        );
+        scene.add(midMesh);
+
+        const coreMat = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 } },
+            vertexShader: `
+                varying vec3 vN, vW;
+                void main(){
+                    vN = normalize(normalMatrix * normal);
+                    vW = (modelMatrix * vec4(position,1.0)).xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+                }`,
+            fragmentShader: `
+                uniform float uTime;
+                varying vec3 vN, vW;
+                void main(){
+                    vec3 V = normalize(cameraPosition - vW);
+                    float f = pow(1.0 - abs(dot(V, vN)), 2.8);
+                    float hue = fract(f * 0.8 + uTime * 0.12);
+                    vec3 rainbow = 0.5 + 0.5 * cos(6.28318*(hue + vec3(0.0,0.33,0.67)));
+                    float bl = sin(uTime * 0.4) * 0.5 + 0.5;
+                    vec3 base = mix(vec3(0.0,0.83,1.0), vec3(0.55,0.2,1.0), bl);
+                    vec3 col = mix(base, rainbow, 0.5) + f * base * 4.5;
+                    gl_FragColor = vec4(col, 0.12 + f * 0.88);
+                }`,
+            transparent: true, side: THREE.DoubleSide,
+            depthWrite: false, blending: THREE.AdditiveBlending
+        });
+        const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), coreMat);
+        scene.add(core);
+
+        const innerW = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.38, 0),
+            new THREE.MeshBasicMaterial({ color: 0x00ccff, wireframe: true, transparent: true, opacity: 0.18 })
+        );
+        core.add(innerW);
+
+        const ringGeo = new THREE.TorusGeometry(1.8, 0.006, 8, 120);
+        const ring1 = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.08 }));
+        ring1.rotation.x = Math.PI / 2.5;
+        scene.add(ring1);
+        const ring2 = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.06 }));
+        ring2.rotation.x = Math.PI / 1.8;
+        ring2.rotation.y = Math.PI / 3;
+        scene.add(ring2);
+
+        const PC = 450;
+        const pPos = new Float32Array(PC * 3);
+        const pSz = new Float32Array(PC);
+        const pCol = new Float32Array(PC * 3);
+        for (let i = 0; i < PC; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * 9 + 0.8;
+            pPos[i*3]   = Math.cos(a) * r;
+            pPos[i*3+1] = (Math.random() - 0.3) * 7;
+            pPos[i*3+2] = Math.sin(a) * r;
+            pSz[i] = Math.random() * 2.2 + 0.4;
+            pCol[i*3]   = Math.random() * 0.55;
+            pCol[i*3+1] = Math.random() * 0.85 + 0.1;
+            pCol[i*3+2] = 1;
+        }
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSz, 1));
+        pGeo.setAttribute('aColor', new THREE.BufferAttribute(pCol, 3));
+        const pMat = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 }, uPR: { value: DPR } },
+            vertexShader: `
+                attribute float aSize; attribute vec3 aColor;
+                varying vec3 vC; uniform float uTime, uPR;
+                void main(){
+                    vC = aColor;
+                    vec3 p = position;
+                    p.y += sin(uTime*.28 + position.x*1.4)*.14;
+                    p.x += cos(uTime*.18 + position.z*1.1)*.07;
+                    vec4 mv = modelViewMatrix * vec4(p,1.0);
+                    gl_PointSize = aSize * uPR * (65.0 / -mv.z);
+                    gl_Position = projectionMatrix * mv;
+                }`,
+            fragmentShader: `
+                varying vec3 vC;
+                void main(){
+                    float d = length(gl_PointCoord - .5);
+                    if(d>.5) discard;
+                    gl_FragColor = vec4(vC, smoothstep(.5,.02,d)*.26);
+                }`,
+            transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+        });
+        scene.add(new THREE.Points(pGeo, pMat));
+
+        scene.add(new THREE.AmbientLight(0x0a0a1e, 0.4));
+        const pl1 = new THREE.PointLight(0x00d4ff, 1.8, 5);
+        scene.add(pl1);
+        const pl2 = new THREE.PointLight(0x8b5cf6, 1.4, 5);
+        scene.add(pl2);
+
+        let mx = 0, my = 0;
+        addEventListener('mousemove', e => {
+            mx = (e.clientX / innerWidth - 0.5) * 2;
+            my = (e.clientY / innerHeight - 0.5) * 2;
+        });
+
+        const clock = new THREE.Clock();
+        (function loop() {
+            requestAnimationFrame(loop);
+            const t = clock.getElapsedTime();
+            outerMesh.rotation.y = t * 0.05;
+            outerMesh.rotation.x = t * 0.025;
+            midMesh.rotation.y = -t * 0.09;
+            midMesh.rotation.z = t * 0.05;
+            core.rotation.y = t * 0.22;
+            core.rotation.x = t * 0.16;
+            innerW.rotation.y = -t * 0.45;
+            innerW.rotation.z = t * 0.28;
+            ring1.rotation.z = t * 0.08;
+            ring2.rotation.z = -t * 0.06;
+            camera.position.x += (mx * 0.55 - camera.position.x) * 0.012;
+            camera.position.y += (1.0 - my * 0.35 - camera.position.y) * 0.012;
+            camera.lookAt(0, 0.2, 0);
+            pl1.intensity = 1.8 + Math.sin(t * 1.4) * 0.5;
+            pl2.intensity = 1.4 + Math.cos(t * 1.7) * 0.4;
+            coreMat.uniforms.uTime.value = t;
+            pMat.uniforms.uTime.value = t;
+            composer.render();
+        })();
+
+        addEventListener('resize', () => {
+            W = innerWidth; H = innerHeight;
+            camera.aspect = W / H;
+            camera.updateProjectionMatrix();
+            renderer.setSize(W, H);
+            composer.setSize(W, H);
+        });
+
+        addEventListener('load', () => {
+            setTimeout(() => document.getElementById('loader').classList.add('done'), 1000);
+        });
+    </script>
+
+    <script>
+        const subEl = document.getElementById('sub-text');
+        const subStr = 'Premium Order Management System';
+        let ci = 0;
+        function typeNext() {
+            if (ci <= subStr.length) {
+                subEl.innerHTML = subStr.slice(0, ci) + '<span class="caret"></span>';
+                ci++;
+                setTimeout(typeNext, 35 + Math.random() * 25);
+            } else {
+                setTimeout(() => { subEl.textContent = subStr; }, 3500);
+            }
+        }
+        setTimeout(typeNext, 1600);
+
+        document.getElementById('sess-id').textContent =
+            Math.random().toString(36).substring(2, 10).toUpperCase();
+
+        function tick() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            document.getElementById('hud-clock').innerHTML =
+                `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}<br>UTC+00:00`;
+        }
+        setInterval(tick, 1000); tick();
+
+        setInterval(() => {
+            document.getElementById('lat-val').textContent = (7 + Math.floor(Math.random() * 14)) + 'ms';
+        }, 2200);
+
+        document.getElementById('pw-btn').addEventListener('click', () => {
+            const pwInp = document.getElementById('inp-pw');
+            const icon = document.querySelector('#pw-btn i');
+            if (pwInp.type === 'password') {
+                pwInp.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                pwInp.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        });
+
+        const form = document.getElementById('login-form');
+        const btn = document.getElementById('btn-login');
+        form.addEventListener('submit', () => {
+            btn.classList.add('is-loading');
+        });
+
+        function showError(message) {
+            const errBox = document.getElementById('dynamic-error');
+            const errText = document.getElementById('dynamic-error-text');
+            errText.textContent = message;
+            errBox.style.display = 'flex';
+            const cardBorder = document.getElementById('card-border');
+            cardBorder.classList.add('shake');
+            setTimeout(() => cardBorder.classList.remove('shake'), 500);
+            setTimeout(() => { errBox.style.display = 'none'; }, 5000);
+        }
+
+        function setBiometricStatus(message, type) {
+            const statusEl = document.getElementById('biometric-status');
+            statusEl.textContent = message;
+            statusEl.className = 'biometric-status ' + (type || '');
+        }
+
+        document.getElementById('inp-pw').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') form.dispatchEvent(new Event('submit'));
+        });
+
+        document.getElementById('biometric-btn').addEventListener('click', async () => {
+            const biometricBtn = document.getElementById('biometric-btn');
+            const username = document.getElementById('inp-user').value.trim();
+
+            if (!window.PublicKeyCredential) {
+                showError('Biometric login is not supported on this browser. Please use Chrome, Edge, or Safari.');
+                return;
+            }
+
+            biometricBtn.classList.add('is-loading');
+            setBiometricStatus('Initiating biometric authentication...', 'loading');
+
+            try {
+                const beginResp = await fetch('/api/webauthn/login/begin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                const options = await beginResp.json();
+
+                if (options.error) throw new Error(options.error);
+
+                setBiometricStatus('Please authenticate with your device...', 'loading');
+
+                const challenge = Uint8Array.from(atob(options.challenge), c => c.charCodeAt(0));
+                
+                const allowCredentials = (options.allowCredentials || []).map(cred => ({
+                    id: Uint8Array.from(atob(cred.id), c => c.charCodeAt(0)),
+                    type: 'public-key'
+                }));
+
+                const assertion = await navigator.credentials.get({
+                    publicKey: {
+                        challenge,
+                        allowCredentials,
+                        userVerification: 'preferred',
+                        timeout: 60000
+                    }
+                });
+
+                setBiometricStatus('Verifying...', 'loading');
+
+                const credentialData = {
+                    id: assertion.id,
+                    rawId: btoa(String.fromCharCode(...new Uint8Array(assertion.rawId))),
+                    response: {
+                        authenticatorData: btoa(String.fromCharCode(...new Uint8Array(assertion.response.authenticatorData))),
+                        clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(assertion.response.clientDataJSON))),
+                        signature: btoa(String.fromCharCode(...new Uint8Array(assertion.response.signature))),
+                        userHandle: assertion.response.userHandle ? 
+                            btoa(String.fromCharCode(...new Uint8Array(assertion.response.userHandle))) : null
+                    },
+                    type: 'public-key'
+                };
+
+                const completeResp = await fetch('/api/webauthn/login/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(credentialData)
+                });
+                const result = await completeResp.json();
+
+                if (result.success) {
+                    setBiometricStatus('Authentication successful! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                } else {
+                    throw new Error(result.error || 'Authentication failed');
+                }
+            } catch (err) {
+                console.error('Biometric login error:', err);
+                
+                let errorMessage = 'Biometric authentication failed.';
+                if (err.name === 'NotAllowedError') {
+                    errorMessage = 'Authentication was cancelled or timed out. Please try again.';
+                } else if (err.name === 'NotSupportedError') {
+                    errorMessage = 'Your device does not support the required authentication method.';
+                } else if (err.message) {
+                    errorMessage = err.message;
+                }
+                
+                showError(errorMessage);
+                setBiometricStatus(errorMessage, 'error');
+            } finally {
+                biometricBtn.classList.remove('is-loading');
+                setTimeout(() => setBiometricStatus('', ''), 5000);
+            }
+        });
+
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('inp-user').focus();
+            }, 1200);
+        });
+
+        if (window.PublicKeyCredential) {
+            setTimeout(() => {
+                const biometricBtn = document.getElementById('biometric-btn');
+                biometricBtn.style.boxShadow = '0 0 40px rgba(139,92,246,0.15)';
+                setTimeout(() => { biometricBtn.style.boxShadow = ''; }, 3000);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
