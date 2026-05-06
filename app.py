@@ -346,6 +346,36 @@ class WebAuthnCredential(db.Model):
     device_name = db.Column(db.String(100), default='')
     created_at = db.Column(db.DateTime, default=now_utc)
 
+     # ==================== CREATE ALL DATABASE TABLES ====================
+# This MUST run before any request
+with app.app_context():
+    db.create_all()
+    print("✅ All database tables created successfully!")
+    
+    # Create admin user if not exists
+    try:
+        if not User.query.filter_by(username='admin').first():
+            random_password = secrets.token_urlsafe(12)
+            admin = User(
+                username='admin',
+                password_hash=generate_password_hash(random_password),
+                display_name='Administrator',
+                role='admin',
+                can_create_orders=True,
+                can_assign_orders=True,
+                can_manage_users=True,
+                can_view_all_orders=True,
+                can_delete_orders=True,
+                can_call=True,
+                timer_enabled=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("=" * 60)
+            print(f"  ADMIN PASSWORD: {random_password}")
+            print("=" * 60)
+    except Exception as e:
+        print(f"Admin creation error: {e}")
 # ==================== NEXUS AI CLASS - FIXED ====================
 class NexusAI:
     def __init__(self):
