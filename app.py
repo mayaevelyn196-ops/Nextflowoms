@@ -756,6 +756,34 @@ You can help with:
 - General assistance
 """
     return context
+
+# ==================== CREATE TABLES & ADMIN USER ====================
+with app.app_context():
+    db.create_all()
+    if not User.query.filter_by(username='admin').first():
+        random_password = secrets.token_urlsafe(12)
+        admin = User(
+            username='admin',
+            password_hash=generate_password_hash(random_password),
+            display_name='Administrator',
+            user_type='System Administrator',
+            role='admin',
+            about='System Administrator',
+            can_create_orders=True,
+            can_assign_orders=True,
+            can_manage_users=True,
+            can_view_all_orders=True,
+            can_review_order=True,
+            can_manage_settings=True,
+            can_delete_orders=True,
+            can_call=True,
+            timer_enabled=True
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print("=" * 60)
+        print(f"  ADMIN PASSWORD: {random_password}")
+        print("=" * 60)
 # ==================== ROUTES ====================
 @app.route('/')
 def index():
