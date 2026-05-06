@@ -2675,27 +2675,33 @@ def check_api_auth():
             return jsonify({'error': 'Authentication required', 'code': 401}), 401
     return None
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        if not User.query.filter_by(username='admin').first():
-            random_password = secrets.token_urlsafe(12)
-            admin = User(
-                username='admin',
-                password_hash=generate_password_hash(random_password),
-                display_name='Administrator',
-                role='admin',
-                can_create_orders=True,
-                can_assign_orders=True,
-                can_manage_users=True,
-                can_view_all_orders=True,
-                can_delete_orders=True,
-                can_call=True,
-                timer_enabled=True
-            )
-            db.session.add(admin)
-            db.session.commit()
-        os.makedirs('templates', exist_ok=True)
+# ==================== DATABASE SETUP (RUNS ON EVERY START) ====================
+with app.app_context():
+    db.create_all()
+    print("✅ Database tables created/verified")
     
+    if not User.query.filter_by(username='admin').first():
+        random_password = secrets.token_urlsafe(12)
+        admin = User(
+            username='admin',
+            password_hash=generate_password_hash(random_password),
+            display_name='Administrator',
+            role='admin',
+            can_create_orders=True,
+            can_assign_orders=True,
+            can_manage_users=True,
+            can_view_all_orders=True,
+            can_delete_orders=True,
+            can_call=True,
+            timer_enabled=True
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print("=" * 60)
+        print(f"  ✅ ADMIN PASSWORD: {random_password}")
+        print("=" * 60)
+
+# ==================== STARTUP ====================
+if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
