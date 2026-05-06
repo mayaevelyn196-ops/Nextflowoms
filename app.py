@@ -34,7 +34,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import socket
 
-# Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
