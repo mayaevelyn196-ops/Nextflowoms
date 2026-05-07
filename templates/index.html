@@ -1220,6 +1220,50 @@ deleteMessageCR(m) {
         },
 
         async init() {
+            // Socket.IO connection with better Railway support
+socket.io.opts.transports = ['websocket', 'polling'];
+socket.io.opts.reconnection = true;
+socket.io.opts.reconnectionAttempts = Infinity;
+socket.io.opts.reconnectionDelay = 1000;
+socket.io.opts.reconnectionDelayMax = 5000;
+
+// Force reconnect on page visibility change
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !socket.connected) {
+        console.log('Page visible, reconnecting socket...');
+        socket.connect();
+        // Re-fetch data
+        this.fetchOrders();
+        this.fetchNotifications();
+        this.fetchOnlineUsers();
+        if (this.activeOrder) this.loadMessages();
+        if (this.tab === 'chatroom') this.joinChatroom();
+    }
+});
+
+// Socket connection status monitoring
+socket.on('connect', () => {
+    console.log('Socket connected successfully');
+    // Re-join rooms after reconnect
+    if (this.activeOrder) {
+        socket.emit('join_order', { order_id: this.activeOrder.id });
+    }
+    if (this.tab === 'chatroom') {
+        socket.emit('join_chatroom');
+    }
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', reason);
+    if (reason === 'io server disconnect') {
+        socket.connect();
+    }
+});
+
+socket.on('connect_error', (error) => {
+    console.log('Socket connection error:', error);
+    setTimeout(() => socket.connect(), 1000);
+});
             this.loadTheme();
             this.setupAntiScreenshot();
             try { 
