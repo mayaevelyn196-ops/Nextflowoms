@@ -601,10 +601,136 @@
 
 <!-- SETTINGS TAB -->
 <div x-show="tab==='settings'"><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)" x-show="profile?.role==='admin'"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="shield" class="w-4 h-4"></i> Anti-Screenshot</h3><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="antiScreenshotEnabled" @change="toggleAntiScreenshot()" class="w-5 h-5"><span>Enable anti-screenshot protection</span></label><p class="text-xs mt-2" style="color:var(--text-muted)">When enabled, screenshots and screen recording will be blocked for all users.</p></div><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)" x-show="profile?.role==='admin'"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="download" class="w-4 h-4"></i> Backup</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="p-4 rounded-lg" style="background:var(--bg-hover)"><h4 class="font-semibold mb-2">Download Backup</h4><button @click="downloadBackup()" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition"><i data-lucide="download" class="w-4 h-4 inline"></i> Download</button></div><div class="p-4 rounded-lg" style="background:var(--bg-hover)"><h4 class="font-semibold mb-2">Restore Backup</h4><input type="file" x-ref="restoreFileInput" accept=".json" class="saas-input mb-2 !py-1.5 !text-xs"><button @click="restoreBackup()" class="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition"><i data-lucide="upload" class="w-4 h-4 inline"></i> Restore</button></div></div></div><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)"><div class="flex items-center justify-between mb-4"><h3 class="font-bold flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="form-input" class="w-4 h-4"></i> Form Builder</h3><button @click="addFormField()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition"><i data-lucide="plus" class="w-4 h-4 inline"></i> Add Field</button></div><div class="space-y-3"><template x-for="(field,idx) in formFields" :key="field.id"><div class="p-4 rounded-lg" style="background:var(--bg-hover);border:1px solid var(--border)"><div class="flex items-start gap-3"><span class="text-xs font-mono pt-2" style="color:var(--text-muted)" x-text="idx+1"></span><div class="flex-1 space-y-3"><div class="grid grid-cols-1 md:grid-cols-4 gap-3"><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Label</label><input type="text" x-model="field.field_label" class="saas-input !py-1.5 !text-sm mt-1"></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Type</label><select x-model="field.field_type" class="saas-input !py-1.5 !text-sm mt-1"><option value="text">Text</option><option value="number">Number</option><option value="select">Dropdown</option><option value="date">Date</option><option value="textarea">Textarea</option><option value="file">File</option></select></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Width</label><select x-model="field.width" class="saas-input !py-1.5 !text-sm mt-1"><option value="full">Full</option><option value="half">Half</option></select></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Show for Nature</label><select x-model="field.show_for_nature" class="saas-input !py-1.5 !text-sm mt-1"><option value="all">All</option><option value="development">Development</option><option value="academic">Academic</option><option value="design">Design</option><option value="content">Content</option><option value="other">Other</option></select></div></div><div x-show="field.field_type==='select'" class="p-3 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border)"><p class="text-xs font-semibold mb-2">Options:</p><div class="flex flex-wrap gap-2 mb-2"><template x-for="(opt,optIdx) in (field.options||[])" :key="optIdx"><span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg text-xs"><span x-text="opt"></span><button @click="removeFieldOption(field,optIdx)" class="text-red-500"><i data-lucide="x" class="w-3 h-3"></i></button></span></template></div><div class="flex gap-2"><input type="text" x-model="field.newOption" @keydown.enter.prevent="addFieldOption(field)" placeholder="Add option..." class="saas-input !py-1.5 !text-sm flex-1"><button @click="addFieldOption(field)" class="text-xs bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg">Add</button></div></div></div><div class="flex flex-col gap-1"><button @click="saveFormField(field)" class="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg">Save</button><button @click="deleteFormField(field)" class="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg">Del</button></div></div></div></template></div></div></div>
+<!-- FLOATING BIOMETRIC BUTTON - SAB USERS KE LIYE -->
+<button 
+    @click="showBiometricModal = true" 
+    class="fixed bottom-24 right-6 z-40 bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-3 rounded-full shadow-2xl hover:scale-110 transition-all duration-300"
+    style="border:none;cursor:pointer"
+    title="Biometric Login">
+    <i data-lucide="fingerprint" class="w-5 h-5"></i>
+</button>
+
+<!-- BIOMETRIC MODAL - SAB USERS KE LIYE -->
+<div x-show="showBiometricModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.away="showBiometricModal=false">
+    <div class="rounded-2xl p-6 w-full max-w-md shadow-2xl" style="background:var(--bg-card);border:1px solid var(--border)">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+                    <i data-lucide="fingerprint" class="w-5 h-5 text-white"></i>
+                </div>
+                <h3 class="font-bold text-lg" style="color:var(--text-primary)">Biometric Authentication</h3>
+            </div>
+            <button @click="showBiometricModal=false" class="chat-icon-btn">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <p class="text-sm mb-4" style="color:var(--text-muted)">
+            Register your fingerprint or face to quickly login next time.
+        </p>
+        
+        <div class="flex justify-center mb-4">
+            <div class="w-24 h-24 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+                <i data-lucide="fingerprint" class="w-12 h-12 text-white"></i>
+            </div>
+        </div>
+        
+        <button 
+            @click="registerBiometric()" 
+            class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition flex items-center justify-center gap-2">
+            <i data-lucide="scan" class="w-4 h-4"></i>
+            Register Biometric
+        </button>
+        
+        <p x-show="biometricStatus" class="text-xs mt-3 text-center" :class="biometricStatus.includes('success') ? 'text-green-500' : 'text-red-500'" x-text="biometricStatus"></p>
+        
+        <div class="mt-4 pt-3 border-t" style="border-color:var(--border)">
+            <p class="text-xs text-center" style="color:var(--text-muted)">
+                <i data-lucide="shield" class="w-3 h-3 inline mr-1"></i>
+                Your biometric data is stored securely on your device.
+            </p>
+        </div>
+    </div>
+</div>
 
 <!-- PROFILE TAB -->
-<div x-show="tab==='profile'&&showProfileModal"><div class="max-w-2xl mx-auto"><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)"><h3 class="font-bold text-lg mb-6 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="user" class="w-5 h-5"></i> Edit Profile</h3><div class="flex items-center gap-6 mb-6"><div class="relative cursor-pointer" @click="$refs.profileImgInput.click()"><div x-show="profileEdit.profile_image" class="w-20 h-20 rounded-2xl overflow-hidden border-4 border-indigo-200"><img :src="profileEdit.profile_image" class="w-full h-full object-cover"></div><div x-show="!profileEdit.profile_image" :class="getAvatarClass(profile?.user_type)" class="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl text-white font-bold"><span x-text="(profile?.display_name||'U').charAt(0).toUpperCase()"></span></div><div class="absolute -bottom-1 -right-1 bg-indigo-600 rounded-full p-1.5"><i data-lucide="camera" class="w-3 h-3 text-white"></i></div><input type="file" x-ref="profileImgInput" accept="image/*" @change="uploadProfileImage($event)" class="hidden"></div><div><h4 class="font-bold text-lg" style="color:var(--text-primary)" x-text="profile?.display_name||'User'"></h4><p class="text-sm" style="color:var(--text-muted)" x-text="profile?.role||'Worker'"></p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Name</label><input type="text" x-model="profileEdit.display_name" class="saas-input mt-1"></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Email</label><input type="email" x-model="profileEdit.email" class="saas-input mt-1"></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Phone</label><input type="tel" x-model="profileEdit.phone" class="saas-input mt-1"></div><div><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Department</label><input type="text" x-model="profileEdit.department" class="saas-input mt-1"></div><div class="md:col-span-2"><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">About</label><input type="text" x-model="profileEdit.about" class="saas-input mt-1"></div><div class="md:col-span-2"><label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Bio</label><textarea x-model="profileEdit.bio" class="saas-input mt-1" rows="3"></textarea></div></div><div class="flex gap-3 mt-6"><button @click="saveProfile()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition">Save</button><button @click="tab='dashboard'" class="px-6 py-2.5 rounded-xl font-semibold" style="background:var(--bg-hover);color:var(--text-secondary);border:none;cursor:pointer">Cancel</button></div></div><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="bell" class="w-4 h-4"></i> Notifications</h3><div class="space-y-2"><template x-for="[key,label] in [['order_created','New Orders'],['order_assigned','Assignments'],['order_completed','Completions'],['new_message','Messages'],['mention','Mentions'],['stage_change','Stage Changes']]" :key="key"><label class="flex items-center justify-between p-3 rounded-lg cursor-pointer" style="background:var(--bg-hover)"><span class="text-sm" style="color:var(--text-primary)" x-text="label"></span><input type="checkbox" x-model="notifPrefs[key]" @change="saveNotifPrefs()" class="w-5 h-5"></label></template></div></div><div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="fingerprint" class="w-4 h-4"></i> Biometric</h3><p class="text-sm mb-3" style="color:var(--text-muted)">Register fingerprint/face for login.</p><button @click="registerBiometric()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Register</button><p x-show="biometricStatus" class="text-xs mt-2" x-text="biometricStatus"></p></div></div></div>
+<div x-show="tab==='profile'&&showProfileModal">
+    <div class="max-w-2xl mx-auto">
+        <!-- Edit Profile Section -->
+        <div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)">
+            <h3 class="font-bold text-lg mb-6 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="user" class="w-5 h-5"></i> Edit Profile</h3>
+            <div class="flex items-center gap-6 mb-6">
+                <div class="relative cursor-pointer" @click="$refs.profileImgInput.click()">
+                    <div x-show="profileEdit.profile_image" class="w-20 h-20 rounded-2xl overflow-hidden border-4 border-indigo-200">
+                        <img :src="profileEdit.profile_image" class="w-full h-full object-cover">
+                    </div>
+                    <div x-show="!profileEdit.profile_image" :class="getAvatarClass(profile?.user_type)" class="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl text-white font-bold">
+                        <span x-text="(profile?.display_name||'U').charAt(0).toUpperCase()"></span>
+                    </div>
+                    <div class="absolute -bottom-1 -right-1 bg-indigo-600 rounded-full p-1.5">
+                        <i data-lucide="camera" class="w-3 h-3 text-white"></i>
+                    </div>
+                    <input type="file" x-ref="profileImgInput" accept="image/*" @change="uploadProfileImage($event)" class="hidden">
+                </div>
+                <div>
+                    <h4 class="font-bold text-lg" style="color:var(--text-primary)" x-text="profile?.display_name||'User'"></h4>
+                    <p class="text-sm" style="color:var(--text-muted)" x-text="profile?.role||'Worker'"></p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Name</label>
+                    <input type="text" x-model="profileEdit.display_name" class="saas-input mt-1">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Email</label>
+                    <input type="email" x-model="profileEdit.email" class="saas-input mt-1">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Phone</label>
+                    <input type="tel" x-model="profileEdit.phone" class="saas-input mt-1">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Department</label>
+                    <input type="text" x-model="profileEdit.department" class="saas-input mt-1">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">About</label>
+                    <input type="text" x-model="profileEdit.about" class="saas-input mt-1">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Bio</label>
+                    <textarea x-model="profileEdit.bio" class="saas-input mt-1" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button @click="saveProfile()" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition">Save</button>
+                <button @click="tab='dashboard'" class="px-6 py-2.5 rounded-xl font-semibold" style="background:var(--bg-hover);color:var(--text-secondary);border:none;cursor:pointer">Cancel</button>
+            </div>
+        </div>
 
+        <!-- Notifications Section -->
+        <div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)">
+            <h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="bell" class="w-4 h-4"></i> Notifications</h3>
+            <div class="space-y-2">
+                <template x-for="[key,label] in [['order_created','New Orders'],['order_assigned','Assignments'],['order_completed','Completions'],['new_message','Messages'],['mention','Mentions'],['stage_change','Stage Changes']]" :key="key">
+                    <label class="flex items-center justify-between p-3 rounded-lg cursor-pointer" style="background:var(--bg-hover)">
+                        <span class="text-sm" style="color:var(--text-primary)" x-text="label"></span>
+                        <input type="checkbox" x-model="notifPrefs[key]" @change="saveNotifPrefs()" class="w-5 h-5">
+                    </label>
+                </template>
+            </div>
+        </div>
+
+        <!-- ✅ BIOMETRIC SECTION - VISIBLE TO ALL USERS -->
+        <div class="rounded-2xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border)">
+            <h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="fingerprint" class="w-4 h-4"></i> Biometric</h3>
+            <p class="text-sm mb-3" style="color:var(--text-muted)">Register fingerprint/face for login.</p>
+            <button @click="registerBiometric()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Register</button>
+            <p x-show="biometricStatus" class="text-xs mt-2" x-text="biometricStatus"></p>
+        </div>
+    </div>
+</div>
 <!-- ANALYTICS TAB -->
 <div x-show="tab==='analytics'"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="rounded-2xl p-5" style="background:var(--bg-card);border:1px solid var(--border)"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="bar-chart-3" class="w-4 h-4"></i> Orders Over Time</h3><canvas id="ordersChart"></canvas></div><div class="rounded-2xl p-5" style="background:var(--bg-card);border:1px solid var(--border)"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="pie-chart" class="w-4 h-4"></i> Priority Breakdown</h3><canvas id="priorityChart"></canvas></div><div class="rounded-2xl p-5 lg:col-span-2" style="background:var(--bg-card);border:1px solid var(--border)" x-show="profile?.role==='admin'"><h3 class="font-bold mb-4 flex items-center gap-2" style="color:var(--text-primary)"><i data-lucide="users" class="w-4 h-4"></i> Worker Performance</h3><canvas id="workerChart"></canvas></div></div></div>
 </div></div>
@@ -978,6 +1104,7 @@ document.addEventListener('alpine:init', () => {
         isRecording: false, isRecordingCR: false,
         otherTyping: false, otherTypingName: '',
         replyTo: null, crReplyTo: null,
+        showBiometricModal: false,
         newOrder: { title: '', description: '', nature: 'development', deadline: '', priority: 'normal', attachments: [] },
         newUser: { username: '', password: '', display_name: '', full_name: '', about: '', role: 'worker', can_call: true, google_sheet_access: false, nic_front: null, nic_back: null, residential_address: '', permanent_address: '' },
         editingUser: null,
