@@ -1220,83 +1220,93 @@ deleteMessageCR(m) {
         },
 
         async init() {
-            // Socket.IO connection with better Railway support
-socket.io.opts.transports = ['websocket', 'polling'];
-socket.io.opts.reconnection = true;
-socket.io.opts.reconnectionAttempts = Infinity;
-socket.io.opts.reconnectionDelay = 1000;
-socket.io.opts.reconnectionDelayMax = 5000;
-
-// Force reconnect on page visibility change
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !socket.connected) {
-        console.log('Page visible, reconnecting socket...');
-        socket.connect();
-        // Re-fetch data
-        this.fetchOrders();
-        this.fetchNotifications();
-        this.fetchOnlineUsers();
-        if (this.activeOrder) this.loadMessages();
-        if (this.tab === 'chatroom') this.joinChatroom();
-    }
-});
-
-// Socket connection status monitoring
-socket.on('connect', () => {
-    console.log('Socket connected successfully');
-    // Re-join rooms after reconnect
-    if (this.activeOrder) {
-        socket.emit('join_order', { order_id: this.activeOrder.id });
-    }
-    if (this.tab === 'chatroom') {
-        socket.emit('join_chatroom');
-    }
-});
-
-socket.on('disconnect', (reason) => {
-    console.log('Socket disconnected:', reason);
-    if (reason === 'io server disconnect') {
+    this.loadTheme();
+    this.setupAntiScreenshot();
+    
+    // ✅ FORCE SOCKET CONNECTION FOR RAILWAY
+    if (socket.disconnected) {
         socket.connect();
     }
-});
-
-socket.on('connect_error', (error) => {
-    console.log('Socket connection error:', error);
-    setTimeout(() => socket.connect(), 1000);
-});
-            this.loadTheme();
-            this.setupAntiScreenshot();
-            try { 
-                const res = await this.api('/api/profile'); 
-                this.profile = res; 
-                this.userId = res.id; 
-                this.profileEdit = { ...res }; 
-                this.initNotifPrefs(); 
-            } catch(e) {
-                console.error('Profile fetch error:', e);
-            }
-            await this.api('/api/timezone', 'POST', { timezone_offset: userTimezoneOffset });
-            mentionableUsers = await this.api('/api/mentionable-users') || [];
-            await Promise.all([
-                this.fetchOrders(), 
-                this.fetchNotifications(), 
-                this.fetchOnlineUsers(), 
-                this.fetchFormFields(), 
-                this.fetchGoogleSheetId(), 
-                this.fetchAntiScreenshot(), 
-                this.fetchTimerStatus()
-            ]);
-            if (this.profile?.role === 'admin') { 
-                this.fetchAnalytics(); 
-                await this.fetchUsers(); 
-                this.fetchAdminTimerData(); 
-                this.fetchGoogleCredentials(); 
-                setInterval(() => this.fetchAdminTimerData(), 60000); 
-            }
-            if (this.profile?.timer_enabled) setInterval(() => this.fetchTimerStatus(), 30000);
-            this.setupSocketListeners();
-            this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
-        },
+    
+    // ✅ FIX: Force WebSocket only, no polling issues
+    socket.io.opts.transports = ['websocket'];
+    socket.io.opts.reconnection = true;
+    socket.io.opts.reconnectionAttempts = 5;
+    socket.io.opts.reconnectionDelay = 1000;
+    
+    // ✅ Socket connection handlers
+    socket.on('connect', () => {
+        console.log('✅ Socket connected');
+        // Re-join rooms after reconnect
+        if (this.activeOrder) {
+            socket.emit('join_order', { order_id: this.activeOrder.id });
+        }
+        if (this.tab === 'chatroom') {
+            socket.emit('join_chatroom');
+            // Force refresh chatroom messages
+            this.api('/api/chatroom/messages').then(d => {
+                if (d?.messages) this.crMessages = d.messages;
+                this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
+                this.scrollToBottom('crMsgs');
+            });
+        }
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('⚠️ Socket disconnected, reconnecting...');
+        setTimeout(() => socket.connect(), 500);
+    });
+    
+    try { 
+        const res = await this.api('/api/profile'); 
+        this.profile = res; 
+        this.userId = res.id; 
+        this.profileEdit = { ...res }; 
+        this.initNotifPrefs(); 
+    } catch(e) {
+        console.error('Profile fetch error:', e);
+    }
+    await this.api('/api/timezone', 'POST', { timezone_offset: userTimezoneOffset });
+    mentionableUsers = await this.api('/api/mentionable-users') || [];
+    await Promise.all([
+        this.fetchOrders(), 
+        this.fetchNotifications(), 
+        this.fetchOnlineUsers(), 
+        this.fetchFormFields(), 
+        this.fetchGoogleSheetId(), 
+        this.fetchAntiScreenshot(), 
+        this.fetchTimerStatus()
+    ]);
+    if (this.profile?.role === 'admin') { 
+        this.fetchAnalytics(); 
+        await this.fetchUsers(); 
+        this.fetchAdminTimerData(); 
+        this.fetchGoogleCredentials(); 
+        setInterval(() => this.fetchAdminTimerData(), 60000); 
+    }
+    if (this.profile?.timer_enabled) setInterval(() => this.fetchTimerStatus(), 30000);
+    this.setupSocketListeners();
+    this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
+    
+    // ✅ FIX: Auto-refresh messages every 2 seconds (Railway kaam karne ke liye)
+    setInterval(() => {
+        if (this.tab === 'chatroom' && document.visibilityState === 'visible') {
+            this.api('/api/chatroom/messages').then(d => {
+                if (d?.messages) {
+                    // Only update if different
+                    if (JSON.stringify(d.messages) !== JSON.stringify(this.crMessages)) {
+                        this.crMessages = d.messages;
+                        this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
+                        this.scrollToBottom('crMsgs');
+                    }
+                }
+            });
+        }
+        if (this.showChat && this.activeOrder && document.visibilityState === 'visible') {
+            this.loadMessages();
+        }
+    }, 2000); // Har 2 second refresh
+},
 
         setupAntiScreenshot() {
             // Prevent screenshot via keyboard shortcuts
@@ -2144,22 +2154,23 @@ get crMentionSuggestions() {
             await this.loadMessages(); 
             this.scrollToBottom('waMsgs');
         },
-        async sendMessage(){
-    const m=this.newMsg?.trim();
+        async sendMessage() {
+    const m = this.newMsg?.trim();
     if(!m) return;
-    this.newMsg='';
-    this.showMentionDropdown=false;
-    socket.emit('typing',{room:'order_'+this.activeOrder.id,typing:false});
-    const fd=new FormData();
-    fd.append('message',m);
-    fd.append('order_id',this.activeOrder.id);
-    fd.append('chat_room','order');
-    if(this.replyTo) fd.append('reply_to',this.replyTo);
-    this.replyTo=null;
-    await this.api('/api/messages','POST',fd);
-    // ✅ Auto-scroll after sending
+    this.newMsg = '';
+    this.showMentionDropdown = false;
+    socket.emit('typing', {room:'order_'+this.activeOrder.id, typing:false});
+    const fd = new FormData();
+    fd.append('message', m);
+    fd.append('order_id', this.activeOrder.id);
+    fd.append('chat_room', 'order');
+    if(this.replyTo) fd.append('reply_to', this.replyTo);
+    this.replyTo = null;
+    await this.api('/api/messages', 'POST', fd);
+    // ✅ Force refresh messages
+    await this.loadMessages();
     this.scrollToBottom('waMsgs');
-    },
+},
         replyToMsg(m){ 
             this.replyTo=m.id; 
             this.$nextTick(()=>{if(this.$refs.msgInput)this.$refs.msgInput.focus();}); 
